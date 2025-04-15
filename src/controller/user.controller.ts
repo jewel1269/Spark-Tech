@@ -1,36 +1,36 @@
-import { Request, Response } from "express";
+import { NextFunction, Request, Response } from "express";
 import User from "../model/user.model";
 import bcrypt from "bcrypt";
+import jwt from "jsonwebtoken";
+import { JWT_SECRET } from "../config/constant";
 
-export const createUser = async (
+export const registerUser = async (
   req: Request,
-  res: Response
-): Promise<Response> => {
+  res: Response,
+  next: NextFunction
+) => {
   try {
-    const { name, email, password } = req.body;
-    if (!name || !email || !password) {
-      return res.status(400).json({
-        message: "All Fields are required",
-      });
+    const { name, email, password, role } = req.body;
+    const userExists = await User.findOne({ email });
+    if (userExists) {
+      return res
+        .status(400)
+        .json({ success: false, message: "User already exists" });
     }
-    const hashPass = await bcrypt.hash(password, 10);
-    
-    const newUser = await User.create({
-      name,
-      email,
-      password: hashPass,
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const user = new User({ name, email, password: hashedPassword, role });
+    await user.save();
+    const token = jwt.sign({ userId: user._id }, JWT_SECRET, {
+      expiresIn: "1h",
     });
 
-    console.log(newUser);
-
-    return res.status(201).json({
+    res.status(201).json({
       success: true,
-      message: "User created Successfully",
-      data: newUser,
+      message: "User Create successfully",
+      data: user,
+      token,
     });
-  } catch (error) {
-    return res.status(500).json({
-      message: "Internal server error",
-    });
+  } catch (err) {
+    next(err);
   }
 };
